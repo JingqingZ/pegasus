@@ -32,7 +32,6 @@ from pegasus.layers import timing
 from pegasus.layers import transformer_block
 from pegasus.models import base
 import tensorflow as tf
-from tensorflow.contrib import layers as contrib_layers
 
 
 class TransformerEncoderDecoderModel(base.BaseModel):
@@ -59,6 +58,8 @@ class TransformerEncoderDecoderModel(base.BaseModel):
     self._num_heads = num_heads
     self._label_smoothing = label_smoothing
     self._decoder_scope_name = "decoder"
+    self._layer_norm_encoder = tf.keras.layers.LayerNormalization(axis=2, epsilon=1e-12, name="LayerNorm")
+    self._layer_norm_decoder = tf.keras.layers.LayerNormalization(axis=2, epsilon=1e-12, name="LayerNorm")
 
   def _encode(self, features, training):
     inputs_BxI = features["inputs"]
@@ -70,7 +71,7 @@ class TransformerEncoderDecoderModel(base.BaseModel):
       states_BxIxD = transformer_block.stack(self._encoder_layers, training,
                                              states_BxIxD, inputs_bias_Bx1xI,
                                              None, None)
-      states_BxIxD = contrib_layers.layer_norm(states_BxIxD, begin_norm_axis=2)
+      states_BxIxD = self._layer_norm_encoder(states_BxIxD)
     return {"memory": states_BxIxD, "memory_bias": inputs_bias_Bx1xI}
 
   def __call__(self, features, training):
@@ -102,7 +103,7 @@ class TransformerEncoderDecoderModel(base.BaseModel):
                                              states_BxTxD, bias_1xTxT,
                                              context["memory"],
                                              context["memory_bias"])
-      states_BxTxD = contrib_layers.layer_norm(states_BxTxD, begin_norm_axis=2)
+      states_BxTxD = self._layer_norm_decoder(states_BxTxD)
     logits_BxTxV = self._embedding_layer(states_BxTxD, False)
     targets_mask_BxT = tf.cast(tf.greater(targets_BxT, 0), self._dtype)
     loss = tf.compat.v1.losses.softmax_cross_entropy(
@@ -138,7 +139,7 @@ class TransformerEncoderDecoderModel(base.BaseModel):
                                             dec_Bx1xD, bias_1x1xT,
                                             context["memory"],
                                             context["memory_bias"], context, i)
-        dec_Bx1xD = contrib_layers.layer_norm(dec_Bx1xD, begin_norm_axis=2)
+        dec_Bx1xD = self._layer_norm_decoder(dec_Bx1xD)
       logits_Bx1xV = self._embedding_layer(dec_Bx1xD, False)
       logits_BxV = tf.squeeze(logits_Bx1xV, axis=1)
       return logits_BxV

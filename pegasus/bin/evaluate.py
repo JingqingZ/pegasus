@@ -25,7 +25,7 @@ from pegasus.params import estimator_utils
 from pegasus.params import registry
 import tensorflow as tf
 
-flags = tf.flags
+flags = tf.compat.v1.flags
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string("master", "",
